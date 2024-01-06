@@ -15,7 +15,52 @@ from requests.exceptions import RequestException
 
 from .exceptions import InvalidCompanyIDError, AresConnectionError, AresServerError
 from .helpers import normalize_company_id_length
-from .settings import COMPANY_ID_LENGTH, ARES_API_URL
+from .settings import COMPANY_ID_LENGTH, ARES_API_URL, SUB_REGISTER_MAP
+
+
+def sub_register_state_transformer(state: str) -> bool:
+    """
+    Converts ARES sub register state to normal boolean.
+    """
+    return True if state == "AKTIVNI" else False
+
+
+def call_ares_sub_register(
+    company_id: str, sub_registers: dict, target: str
+) -> dict | None:
+    """
+    Call ARES sub register and returns all the data.
+    It is upto specific implementation to find in the
+    nested hell the data you need.
+
+    :param sub_registers:
+    Example:
+    ========
+        >>> sub_registers = {
+        ...     "stavZdrojeVr": "AKTIVNI",
+        ...     "stavZdrojeRes": "NEEXISTUJICI",
+        ...     ...
+        ... }
+
+    https://ares.gov.cz/swagger-ui/#/
+
+    Example:
+    ========
+        >>> company_id = "25853902"
+        >>> sub_registers = call_ares(company_id)["sub_registers"])
+        >>> target = "stavZdrojeVr"
+        >>> call_ares_sub_register(company_id, sub_registers, target)
+    """
+    if not sub_register_state_transformer(sub_registers.get(target)):
+        return None
+    url = urljoin(
+        ARES_API_URL,
+        f"ekonomicke-subjekty-v-be/rest/{SUB_REGISTER_MAP.get(target)}{company_id}",
+    )
+    response = requests.get(url)
+    if response.status_code != codes.ok:
+        return None
+    return response.json()
 
 
 def call_ares(company_id):
@@ -55,7 +100,7 @@ def call_ares(company_id):
         raise AresServerError(response_json["kod"], response_json["popis"])
 
     address = response_json["sidlo"]
-    full_text_address = address.get("textovaAdresa",'')
+    full_text_address = address.get("textovaAdresa", '')
 
     result_company_info = {
         'legal': {
@@ -73,7 +118,8 @@ def call_ares(company_id):
                                          address.get('cisloDomovni'),
                                          address.get('cisloOrientacni'), full_text_address),
             'zip_code': get_czech_zip_code(address.get('psc'), full_text_address)
-        }
+        },
+        "sub_registers": response_json["seznamRegistraci"],
     }
     return result_company_info
 

@@ -10,7 +10,7 @@ from unittest import TestCase
 import responses
 
 from ares_util import ares
-from ares_util.ares import call_ares
+from ares_util.ares import call_ares, call_ares_sub_register
 from ares_util.exceptions import AresConnectionError, AresServerError
 from ares_util.helpers import normalize_company_id_length
 from ares_util.settings import ARES_API_URL
@@ -93,3 +93,13 @@ class CallARESTestCase(TestCase):
 
         self.assertEqual(context.exception.fault_code, u'Server.Service')
         self.assertEqual(context.exception.fault_message, u'obecná chyba serverové služby')
+
+    @responses.activate
+    def test_call_sub_register(self):
+        company_id = 25853902
+
+        sub_registers = call_ares(company_id=company_id)['sub_registers']
+
+        sub_register = call_ares_sub_register(company_id=company_id, sub_registers=sub_registers, target='stavZdrojeVr')
+
+        self.assertNotEmpty(sub_register)
